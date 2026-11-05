@@ -1,0 +1,13 @@
+# Local development artifacts only (not the shipped WordPress plugin)
+.DS_Store
+*.log
+*.tmp
+*.bak
+.env
+.env.*
+!.env.example
+.idea/
+.vscode/
+node_modules/
+vendor/
+__pycache__/

@@ -1,0 +1,7 @@
+/* Yablonsky Security login-surface fit: keep human verification inside WordPress' native form. */
+.login #login{width:380px;max-width:calc(100% - 32px)}
+.login form{box-sizing:border-box}
+.login .ysec-captcha{box-sizing:border-box;width:100%;max-width:100%;margin:14px 0;overflow:hidden}
+.login .cf-turnstile{width:100%;min-width:0}
+.login .g-recaptcha{max-width:100%;overflow:hidden}
+@media(max-width:420px){.login #login{width:auto;margin-left:16px;margin-right:16px;padding-left:0;padding-right:0}.login .ysec-captcha{overflow:auto}}
