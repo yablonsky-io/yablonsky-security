@@ -1,49 +1,61 @@
-# Yablonsky Security
+# Yablonsky Security — WordPress Firewall, Malware Scanner & Login Protection
 
-**Local-first security for WordPress — observation, prevention, response, verification, and recovery.**
+**Local-first WordPress security plugin for firewall protection, malware scanning, login security, file integrity monitoring, website hardening, and optional AI assistance.**
 
-Yablonsky Security is a self-contained WordPress security plugin. Core protection operates locally and does not require a remote AI provider. Optional external AI assistance and crawler-list downloads are administrator-controlled.
+Yablonsky Security helps website owners, WooCommerce businesses, developers, and agencies protect WordPress websites with locally operated security controls. Its core protection does not require an external AI provider or a recurring AI subscription.
 
-## Capabilities
+**[Yablonsky.io — official website](https://yablonsky.io/)** · **[Latest Yablonsky Security release and WordPress installer](https://github.com/yablonsky-io/yablonsky-security/releases/latest)**
 
-- Application firewall with configurable rule profiles and guarded, reversible response.
-- Reconnaissance and security-event observation, forensic evidence, and operational reporting.
-- Login protection, rate limiting, CAPTCHA, TOTP-based two-factor authentication, and session tools.
-- File integrity monitoring, malware scanning, local quarantine, and recovery controls.
-- Hardening, security headers, account controls, and an administrator-invoked security Autopilot.
-- Optional AI-assisted review without executing externally generated PHP code.
-- Bundled interface translations for 36 locale variants. User-interface language follows the WordPress administrator profile.
+## WordPress Firewall (WAF) and Website Threat Protection
 
-## Requirements and tested environment
+Configure application firewall profiles to identify suspicious requests, manage abusive traffic, review security events, and apply guarded, reversible responses. Forensic evidence and operational reporting help administrators understand security activity before taking action.
 
-- Declared minimum: WordPress 6.4 and PHP 7.4.
-- Verified deployments: WordPress 6.4.2, PHP 8.1.2, Nginx/PHP-FPM, including sites with WooCommerce and WPML.
-- Production observations: both sites reported a green Plugin Check; prior Security Doctor reports showed 20/20 PASS.
+## WordPress Malware Scanner and File Integrity Monitoring
 
-Support claims for newer WordPress/PHP versions are subject to additional compatibility testing. The security and performance test program is ongoing; no comparative performance or penetration-testing certification is claimed here.
+Monitor website file integrity, run malware scans, review findings, and use local quarantine and recovery controls. Security decisions remain visible to the site administrator.
 
-## Installation
+## WordPress Login Security, Brute-Force Protection and Two-Factor Authentication
 
-Install the versioned WordPress plugin ZIP through **Plugins → Add New → Upload Plugin** and activate it. To browse the source, see the files in this repository. The release ZIP and repository source are different distribution surfaces: do not upload a GitHub source-upload batch as a WordPress plugin.
+Strengthen account protection with login rate limiting, CAPTCHA, TOTP-based two-factor authentication (2FA), and session-management tools. Configure protections to fit the site's access requirements.
 
-## Operation and trust boundaries
+## WordPress Security Hardening and Security Autopilot
 
-- WordPress users choose their own admin UI language in **Users → Profile → Language**. Yablonsky Security does not replace the WordPress language selector.
-- Yablonsky SEO controls indexing and permitted content use; Yablonsky Security handles bot verification, spoofing, abuse, and enforcement; Yablonsky Performance handles caching and request efficiency. Each plugin works independently.
-- Optional services require explicit administrator configuration and use conservative, auditable controls.
-- False-positive prevention and administrative recovery remain priorities; protective rules should be tested against each site's integrations.
+Review security headers, account safeguards, configuration controls, and administrator-invoked Security Autopilot workflows. The product emphasizes controlled changes, visibility, and recovery rather than unattended irreversible actions.
 
-## Documentation
+## Security Monitoring, Bot Verification and Optional AI Assistance
 
-- [`readme.txt`](readme.txt) — WordPress plugin description and feature details.
-- [`CHANGELOG.md`](CHANGELOG.md) — cumulative changes.
-- [`docs/YABLONSKY_PRODUCT_VERSIONING_CANON_v1.0.0_2026-09-21.md`](docs/YABLONSKY_PRODUCT_VERSIONING_CANON_v1.0.0_2026-09-21.md) — product versioning.
-- [`docs/YSEC_CRAWLER_ACCEPTANCE.md`](docs/YSEC_CRAWLER_ACCEPTANCE.md) — crawler-verification boundaries.
+Observe reconnaissance and other security events, investigate suspicious activity, and use optional AI-assisted review when configured by an administrator. External AI is not required for the core security features; externally generated PHP code is not executed as a security response.
 
-## Security and licensing
+Yablonsky Security focuses on bot authenticity, spoofing, abuse prevention, and enforcement. [Yablonsky SEO — GEO & AEO](https://yablonsky.io/seo/) addresses content discovery, indexing, and search/AI crawler preferences. Each plugin operates independently.
 
-Security software reduces risk but cannot guarantee a site is free of vulnerabilities. Do not post credentials, private server logs, or exploit details in public issues.
+## Multilingual WordPress Security Administration
 
-**License:** GPL-2.0-or-later. See [`LICENSE`](LICENSE).
+Yablonsky Security includes interface translations for 36 locale variants. The interface follows the WordPress administrator profile language rather than replacing WordPress language settings.
 
-Developed by [Yablonsky.io](https://yablonsky.io/).
+## Download and Install Yablonsky Security for WordPress
+
+1. Visit the **[latest Yablonsky Security GitHub Release](https://github.com/yablonsky-io/yablonsky-security/releases/latest)**.
+2. Under **Assets**, download the versioned **`yablonsky-security-*.zip`** installer; GitHub's autogenerated source archives are not the WordPress installation package.
+3. In WordPress Admin, go to **Plugins → Add New Plugin → Upload Plugin**.
+4. Upload the installer, activate the plugin, and review its dashboard and security settings.
+
+Declared minimum requirements: **WordPress 6.4** and **PHP 7.4**. Validated deployments include WordPress 6.4.2 and PHP 8.1.2 with WooCommerce and WPML. Support for newer combinations requires separate verification. Consult the current release for corrective changes.
+
+## WordPress Security, Licensing and Responsible Use
+
+Security controls reduce risk but cannot guarantee a vulnerability-free website. Review firewall rules and compatibility before applying stronger protections. Do not share passwords, credentials, or private forensic logs in public issues.
+
+**License:** GPL-2.0-or-later (see the repository's LICENSE file).
+
+---
+
+**Explore more from Yablonsky.io**
+
+- [Yablonsky.io — Official Website and Product Ecosystem](https://yablonsky.io/)
+- [Yablonsky SEO — GEO & AEO for Search and AI Discovery](https://yablonsky.io/seo/)
+- [Yablonsky AI Chatbots — AI Assistants for Websites](https://yablonsky.io/ai-chatbots/)
+- [Yablonsky.io AI — AI Platform](https://ai.yablonsky.io/)
+
+Developed and maintained by [Yablonsky.io](https://yablonsky.io/).
+
+**Yablonsky Security — Protect locally. Stay in control.**
