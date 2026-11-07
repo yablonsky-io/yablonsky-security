@@ -53,6 +53,7 @@ Security controls reduce risk but cannot guarantee a vulnerability-free website.
 
 - [Yablonsky.io — Official Website and Product Ecosystem](https://yablonsky.io/)
 - [Yablonsky SEO — GEO & AEO for Search and AI Discovery](https://yablonsky.io/seo/)
+- [Yablonsky Multilingual plugin for WordPress — Language and Translation Management](https://yablonsky.io/multilingual/)
 - [Yablonsky AI Chatbots — AI Assistants for Websites](https://yablonsky.io/ai-chatbots/)
 - [Yablonsky.io AI — AI Platform](https://ai.yablonsky.io/)
 
