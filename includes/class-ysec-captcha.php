@@ -37,8 +37,11 @@ final class YSEC_Captcha {
         // Load only our local bootstrap through WordPress. The local bootstrap then loads the
         // administrator-selected provider runtime in the browser. This keeps plugin assets local
         // while preserving the provider-required challenge runtime and explicit external-service boundary.
-        $asset_version = str_replace( '.', '-', YSEC_VERSION );
-        wp_enqueue_script( 'ysec-captcha-loader', YSEC_URL . 'assets/captcha-loader-' . $asset_version . '.js', array(), YSEC_VERSION, true );
+        // The client bootstrap is versioned independently of PHP patch releases.
+        // Do not derive its filename from YSEC_VERSION: a missing file would prevent
+        // the challenge from loading while server-side verification remains enabled.
+        $captcha_asset_build = '2-84-2';
+        wp_enqueue_script( 'ysec-captcha-loader', YSEC_URL . 'assets/captcha-loader-' . $captcha_asset_build . '.js', array(), YSEC_VERSION, true );
         $class = 'turnstile' === $provider ? 'cf-turnstile' : 'g-recaptcha';
         $surface_class = str_starts_with( $surface, 'wp_' ) ? 'ysec-captcha--wp' : 'ysec-captcha--commerce';
         // Cloudflare's flexible widget is useful inside WordPress' narrow native
@@ -53,8 +56,8 @@ final class YSEC_Captcha {
 
     public static function enqueue_login_style(): void {
         if ( ! self::configured() ) return;
-        $asset_version = str_replace( '.', '-', YSEC_VERSION );
-        wp_enqueue_style( 'ysec-login-security', YSEC_URL . 'assets/login-security-' . $asset_version . '.css', array(), YSEC_VERSION );
+        $captcha_asset_build = '2-84-2';
+        wp_enqueue_style( 'ysec-login-security', YSEC_URL . 'assets/login-security-' . $captcha_asset_build . '.css', array(), YSEC_VERSION );
     }
     public static function validate_wp_login( $user, $username, $password ) {
         if ( ! self::is_wp_login_request() || ! self::should_validate_post( 'wp_login' ) ) return $user;
