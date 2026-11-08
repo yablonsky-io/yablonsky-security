@@ -97,3 +97,30 @@ jobs:
           name: ysec-plugin-check-${{ matrix.wp }}
           path: ${{ runner.temp }}/plugin-check-${{ matrix.wp }}.log
           if-no-files-found: ignore
+  wpcs:
+    name: WordPress coding/security standards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          tools: composer
+          coverage: none
+      - name: Install official WordPress coding standards
+        run: |
+          composer config --global allow-plugins.dealerdirect/phpcodesniffer-composer-installer true
+          composer global require --no-interaction "squizlabs/php_codesniffer:^3.13" "wp-coding-standards/wpcs:^3.2" "dealerdirect/phpcodesniffer-composer-installer:^1.0"
+      - name: Scan plugin security and write full report
+        shell: bash
+        run: |
+          set -euo pipefail
+          PHPCS="$(composer global config bin-dir --absolute)/phpcs"
+          "$PHPCS" --standard=WordPress --sniffs=WordPress.Security --extensions=php --report=summary . 2>&1 | tee "$RUNNER_TEMP/wpcs-security.txt"
+      - name: Upload WPCS report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ysec-wpcs-security
+          path: ${{ runner.temp }}/wpcs-security.txt
+          if-no-files-found: ignore
