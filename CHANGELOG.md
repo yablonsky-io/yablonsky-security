@@ -5,6 +5,7 @@
 - Set the canonical product Plugin URI to https://yablonsky.io/security/.
 - Synchronize full GPLv2 license and shorten the WordPress.org readme while preserving external-service disclosures.
 - Preserve stored settings, database schema, REST contracts, hooks, and security policy behavior.
+- Keep the public CSP-report collector bounded when source IP cannot be established.
 
 ## 2.88.5 — Early MU proof input compliance correction
 
