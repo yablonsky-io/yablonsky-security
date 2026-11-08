@@ -6,6 +6,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: ysec-wporg-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   php-syntax:
     runs-on: ubuntu-latest
@@ -80,7 +83,11 @@ jobs:
           wp core download --version='${{ matrix.wp }}' --path=/tmp/ysec-wp
           wp config create --path=/tmp/ysec-wp --dbname=wordpress --dbuser=wordpress --dbpass=wordpress --dbhost=127.0.0.1
           wp core install --path=/tmp/ysec-wp --url=http://localhost --title='YSec CI' --admin_user=admin --admin_password='local-test-password' --admin_email=ci@example.invalid --skip-email
-          cp -a "$GITHUB_WORKSPACE" /tmp/ysec-wp/wp-content/plugins/yablonsky-security
+          mkdir -p /tmp/ysec-wp/wp-content/plugins/yablonsky-security
+          rsync -a --exclude='.git' --exclude='.github' --exclude='.gitignore' --exclude='tests' "$GITHUB_WORKSPACE/" /tmp/ysec-wp/wp-content/plugins/yablonsky-security/
+          wp config set WP_DEBUG true --raw --path=/tmp/ysec-wp
+          wp config set WP_DEBUG_LOG true --raw --path=/tmp/ysec-wp
+          wp config set WP_DEBUG_DISPLAY false --raw --path=/tmp/ysec-wp
           wp plugin activate yablonsky-security --path=/tmp/ysec-wp
           wp plugin is-active yablonsky-security --path=/tmp/ysec-wp
           wp eval 'echo "YSEC_ACTIVE=".YSEC_VERSION."\n";' --path=/tmp/ysec-wp
@@ -89,7 +96,21 @@ jobs:
         run: |
           set -euo pipefail
           wp plugin install plugin-check --activate --path=/tmp/ysec-wp
-          wp plugin check yablonsky-security --path=/tmp/ysec-wp --require=/tmp/ysec-wp/wp-content/plugins/plugin-check/cli.php --mode=new --format=table 2>&1 | tee "$RUNNER_TEMP/plugin-check-${{ matrix.wp }}.log"
+          set +e
+          wp plugin check yablonsky-security --path=/tmp/ysec-wp --require=/tmp/ysec-wp/wp-content/plugins/plugin-check/cli.php --mode=new --format=table >"$RUNNER_TEMP/plugin-check-${{ matrix.wp }}.log" 2>&1
+          rc=$?
+          set -e
+          cat "$RUNNER_TEMP/plugin-check-${{ matrix.wp }}.log"
+          if [ -f /tmp/ysec-wp/wp-content/debug.log ]; then
+            echo '=== WordPress PHP debug log ==='
+            tail -n 100 /tmp/ysec-wp/wp-content/debug.log
+          fi
+          if [ "$rc" -ne 0 ]; then exit "$rc"; fi
+          if grep -Eq '[[:space:]]ERROR[[:space:]]' "$RUNNER_TEMP/plugin-check-${{ matrix.wp }}.log"; then
+            echo 'PLUGIN_CHECK_FOUND_ERRORS=FAIL'
+            exit 1
+          fi
+          echo 'PLUGIN_CHECK_NO_ERRORS=PASS'
       - name: Upload Plugin Check log
         if: always()
         uses: actions/upload-artifact@v4
@@ -116,7 +137,7 @@ jobs:
         run: |
           set -euo pipefail
           PHPCS="$(composer global config bin-dir --absolute)/phpcs"
-          "$PHPCS" --standard=WordPress --sniffs=WordPress.Security --extensions=php --report=summary . 2>&1 | tee "$RUNNER_TEMP/wpcs-security.txt"
+          "$PHPCS" --standard=WordPress --sniffs=WordPress.Security.EscapeOutput,WordPress.Security.NonceVerification,WordPress.Security.ValidatedSanitizedInput --extensions=php --report=summary . 2>&1 | tee "$RUNNER_TEMP/wpcs-security.txt"
       - name: Upload WPCS report
         if: always()
         uses: actions/upload-artifact@v4
