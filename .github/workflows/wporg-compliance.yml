@@ -1,0 +1,99 @@
+name: YSec WordPress.org compliance preflight
+on:
+  push:
+    branches:
+      - fix/wporg-compliance-2.88.6
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  php-syntax:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['7.4', '8.4']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+      - name: PHP syntax and source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do php -l "$file" >/dev/null; done < <(find . -name '*.php' -print0)
+          php -r '
+          $p=file_get_contents("yablonsky-security.php");
+          $r=file_get_contents("readme.txt");
+          if(strpos($p,"Version: 2.88.6")===false || strpos($r,"Stable tag: 2.88.6")===false) exit(1);
+          foreach(["admin-2-88-5.js","admin-2-88-5.css","captcha-loader-2-84-2.js","login-security-2-84-2.css"] as $f) if(!is_file("assets/".$f)) exit(2);
+          if(strlen($r)>=10000) exit(3);
+          if(count(glob("languages/yablonsky-security-*.po"))!==36 || count(glob("languages/yablonsky-security-*.mo"))!==36) exit(4);
+          if(strpos(file_get_contents("LICENSE"),"GNU GENERAL PUBLIC LICENSE")===false) exit(5);
+          echo "SOURCE_STATIC_GATE=PASS\n";
+          '
+      - name: JavaScript syntax
+        run: |
+          for x in assets/*.js; do node --check "$x"; done
+          echo 'JS_SYNTAX=PASS'
+  wordpress:
+    runs-on: ubuntu-latest
+    needs: php-syntax
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { wp: '6.4.2', php: '7.4' }
+          - { wp: '7.1.4', php: '8.4' }
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: testpass
+          MYSQL_DATABASE: wordpress
+          MYSQL_USER: wordpress
+          MYSQL_PASSWORD: wordpress
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -uroot -ptestpass"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mysqli, mbstring, dom, curl, zip
+          coverage: none
+      - name: WordPress clean install and YSec activation
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar -o /tmp/wp-cli.phar
+          sudo mv /tmp/wp-cli.phar /usr/local/bin/wp
+          sudo chmod +x /usr/local/bin/wp
+          mkdir -p /tmp/ysec-wp/wp-content/plugins
+          wp core download --version='${{ matrix.wp }}' --path=/tmp/ysec-wp
+          wp config create --path=/tmp/ysec-wp --dbname=wordpress --dbuser=wordpress --dbpass=wordpress --dbhost=127.0.0.1
+          wp core install --path=/tmp/ysec-wp --url=http://localhost --title='YSec CI' --admin_user=admin --admin_password='local-test-password' --admin_email=ci@example.invalid --skip-email
+          cp -a "$GITHUB_WORKSPACE" /tmp/ysec-wp/wp-content/plugins/yablonsky-security
+          wp plugin activate yablonsky-security --path=/tmp/ysec-wp
+          wp plugin is-active yablonsky-security --path=/tmp/ysec-wp
+          wp eval 'echo "YSEC_ACTIVE=".YSEC_VERSION."\n";' --path=/tmp/ysec-wp
+      - name: WordPress Plugin Check
+        shell: bash
+        run: |
+          set -euo pipefail
+          wp plugin install plugin-check --activate --path=/tmp/ysec-wp
+          wp plugin check yablonsky-security --path=/tmp/ysec-wp --require=/tmp/ysec-wp/wp-content/plugins/plugin-check/cli.php --mode=new --format=table 2>&1 | tee "$RUNNER_TEMP/plugin-check-${{ matrix.wp }}.log"
+      - name: Upload Plugin Check log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ysec-plugin-check-${{ matrix.wp }}
+          path: ${{ runner.temp }}/plugin-check-${{ matrix.wp }}.log
+          if-no-files-found: ignore
