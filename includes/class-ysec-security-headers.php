@@ -736,7 +736,9 @@ final class YSEC_Security_Headers {
 
     private static function report_rate_allowed(): bool {
         $ip = YSEC_Utils::client_ip();
-        if ( '' === $ip ) return true;
+        // No reliable source identity means the public collector cannot enforce its
+        // per-source quota. Drop the report rather than allow unbounded writes.
+        if ( '' === $ip ) return false;
         $key = 'ysec_csp_rl_' . substr( hash( 'sha256', $ip ), 0, 24 );
         $count = absint( get_transient( $key ) );
         if ( $count >= 60 ) return false;
