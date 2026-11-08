@@ -1,3 +1,11 @@
+## 2.88.6
+
+- Fix client-side CAPTCHA bootstrap and login-style asset references when the plugin patch version changes; validate that referenced build files exist.
+- Pin unchanged admin assets to their actual build filenames so corrective PHP updates do not request missing CSS or JavaScript.
+- Set the canonical product Plugin URI to https://yablonsky.io/security/.
+- Synchronize full GPLv2 license and shorten the WordPress.org readme while preserving external-service disclosures.
+- Preserve stored settings, database schema, REST contracts, hooks, and security policy behavior.
+
 ## 2.88.5 — Early MU proof input compliance correction
 
 - Unslash and sanitize synthetic Firewall Proof URI and token values before parsing them in the early MU-runtime response handler, addressing the four WordPress Plugin Check warnings found on both live test sites.
