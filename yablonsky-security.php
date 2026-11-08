@@ -1,9 +1,9 @@
 <?php
 /**
  * Plugin Name: Yablonsky Security
- * Plugin URI: https://yablonsky.io/
+ * Plugin URI: https://yablonsky.io/security/
  * Description: Security, integrity, reconnaissance intelligence, login protection, auditing, and guarded response for WordPress.
- * Version: 2.88.5
+ * Version: 2.88.6
  * Requires at least: 6.4
  * Requires PHP: 7.4
  * Author: Yablonsky.io
@@ -46,7 +46,7 @@ if ( ! function_exists( 'str_ends_with' ) ) {
     }
 }
 
-define( 'YSEC_VERSION', '2.88.5' );
+define( 'YSEC_VERSION', '2.88.6' );
 define( 'YSEC_DB_VERSION', '1.9.4' );
 define( 'YSEC_FILE', __FILE__ );
 define( 'YSEC_DIR', plugin_dir_path( __FILE__ ) );
