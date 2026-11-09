@@ -101,12 +101,14 @@ jobs:
           set -euo pipefail
           wp plugin install plugin-check --activate --path=/tmp/ysec-wp
           echo '=== Plugin Check reference plugin diagnostic ==='
+          wp plugin install hello-dolly --activate --path=/tmp/ysec-wp
           set +e
-          php -d max_execution_time=300 -d memory_limit=1024M /usr/local/bin/wp plugin check hello --path=/tmp/ysec-wp --require=/tmp/ysec-wp/wp-content/plugins/plugin-check/cli.php --mode=new --format=table >/tmp/ysec-pcp-control.log 2>&1
+          php -d max_execution_time=300 -d memory_limit=1024M /usr/local/bin/wp plugin check hello-dolly --path=/tmp/ysec-wp --require=/tmp/ysec-wp/wp-content/plugins/plugin-check/cli.php --mode=new --format=table >/tmp/ysec-pcp-control.log 2>&1
           control_rc=$?
           echo "PCP_CONTROL_RC=$control_rc"
           tail -n 12 /tmp/ysec-pcp-control.log || true
           echo '=== Plugin Check YSec ==='
+          # Control is diagnostic only; keep it in the log as evidence, not a release gate.
           php -d max_execution_time=300 -d memory_limit=1024M /usr/local/bin/wp plugin check yablonsky-security --path=/tmp/ysec-wp --require=/tmp/ysec-wp/wp-content/plugins/plugin-check/cli.php --mode=new --format=table >"$RUNNER_TEMP/plugin-check-${{ matrix.wp }}.log" 2>&1
           rc=$?
           set -e
