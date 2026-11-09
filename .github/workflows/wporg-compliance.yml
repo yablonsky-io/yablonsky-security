@@ -109,6 +109,13 @@ jobs:
           tail -n 12 /tmp/ysec-pcp-control.log || true
           echo '=== Plugin Check YSec ==='
           if [ "${{ matrix.php }}" = '7.4' ]; then
+            echo '=== PHP 7.4 selected-check diagnostics ==='
+            for check in late_escaping i18n_usage; do
+              php -d max_execution_time=90 -d memory_limit=1024M /usr/local/bin/wp plugin check yablonsky-security --path=/tmp/ysec-wp --checks="$check" --mode=new --format=table >"/tmp/ysec-pcp-$check.log" 2>&1
+              selected_rc=$?
+              echo "PCP_PHP74_CHECK=$check RC=$selected_rc"
+              tail -n 5 "/tmp/ysec-pcp-$check.log" || true
+            done
             echo '=== PHP 7.4 isolated static-only diagnostic (without runtime --require) ==='
             php -d max_execution_time=180 -d memory_limit=1024M /usr/local/bin/wp plugin check yablonsky-security --path=/tmp/ysec-wp --mode=new --format=table >/tmp/ysec-pcp-static.log 2>&1
             static_rc=$?
