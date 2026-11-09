@@ -95,53 +95,59 @@ jobs:
           wp plugin activate yablonsky-security --path=/tmp/ysec-wp
           wp plugin is-active yablonsky-security --path=/tmp/ysec-wp
           wp eval 'echo "YSEC_ACTIVE=".YSEC_VERSION."\n";' --path=/tmp/ysec-wp
-      - name: WordPress Plugin Check
+      - name: WordPress Plugin Check (full on 8.4, exhaustive isolated checks on 7.4)
         shell: bash
         run: |
           set -euo pipefail
           wp plugin install plugin-check --activate --path=/tmp/ysec-wp
-          echo '=== Plugin Check reference plugin diagnostic ==='
-          wp plugin install hello-dolly --activate --path=/tmp/ysec-wp
-          set +e
-          php -d max_execution_time=300 -d memory_limit=1024M /usr/local/bin/wp plugin check hello-dolly --path=/tmp/ysec-wp --require=/tmp/ysec-wp/wp-content/plugins/plugin-check/cli.php --mode=new --format=table >/tmp/ysec-pcp-control.log 2>&1
-          control_rc=$?
-          echo "PCP_CONTROL_RC=$control_rc"
-          tail -n 12 /tmp/ysec-pcp-control.log || true
-          echo '=== Plugin Check YSec ==='
+          WP=/usr/local/bin/wp
+          args=(--path=/tmp/ysec-wp --require=/tmp/ysec-wp/wp-content/plugins/plugin-check/cli.php --mode=new --format=table)
           if [ "${{ matrix.php }}" = '7.4' ]; then
-            echo '=== PHP 7.4 selected-check diagnostics ==='
-            for check in late_escaping i18n_usage; do
-              php -d max_execution_time=90 -d memory_limit=1024M /usr/local/bin/wp plugin check yablonsky-security --path=/tmp/ysec-wp --checks="$check" --mode=new --format=table >"/tmp/ysec-pcp-$check.log" 2>&1
-              selected_rc=$?
-              echo "PCP_PHP74_CHECK=$check RC=$selected_rc"
-              tail -n 5 "/tmp/ysec-pcp-$check.log" || true
-            done
-            echo '=== PHP 7.4 isolated static-only diagnostic (without runtime --require) ==='
-            php -d max_execution_time=180 -d memory_limit=1024M /usr/local/bin/wp plugin check yablonsky-security --path=/tmp/ysec-wp --mode=new --format=table >/tmp/ysec-pcp-static.log 2>&1
-            static_rc=$?
-            echo "PCP_PHP74_STATIC_RC=$static_rc"
-            tail -n 25 /tmp/ysec-pcp-static.log || true
+            # PHP 7.4 legacy runner terminates with 255 when scanning this 19MB
+            # multilingual package in a single aggregate PCP invocation. Run
+            # every stable check in a separate official PCP process instead;
+            # all individual errors and nonzero statuses remain fatal.
+            "$WP" plugin list-checks --path=/tmp/ysec-wp --format=csv --fields=slug >"$RUNNER_TEMP/ysec-check-slugs.csv"
+            tail -n +2 "$RUNNER_TEMP/ysec-check-slugs.csv" | tr -d '\r' | sed '/^[[:space:]]*$/d' >"$RUNNER_TEMP/ysec-check-slugs.txt"
+            count=$(wc -l <"$RUNNER_TEMP/ysec-check-slugs.txt")
+            echo "PCP_STABLE_CHECK_COUNT=$count"
+            if [ "$count" -lt 10 ]; then echo 'PCP_CHECK_ENUMERATION=FAIL'; exit 1; fi
+            failed=0
+            : >"$RUNNER_TEMP/plugin-check-${{ matrix.wp }}.log"
+            while IFS= read -r check; do
+              printf 'CHECK %s\n' "$check" >>"$RUNNER_TEMP/plugin-check-${{ matrix.wp }}.log"
+              set +e
+              php -d max_execution_time=300 -d memory_limit=1024M "$WP" plugin check yablonsky-security "${args[@]}" --checks="$check" >"$RUNNER_TEMP/ysec-single-check.log" 2>&1
+              rc=$?
+              set -e
+              if [ "$rc" -ne 0 ] || grep -Eq '[[:space:]]ERROR[[:space:]]' "$RUNNER_TEMP/ysec-single-check.log"; then
+                echo "CHECK_FAIL=$check exit=$rc"
+                cat "$RUNNER_TEMP/ysec-single-check.log"
+                failed=$((failed + 1))
+              else
+                echo "CHECK_PASS=$check"
+              fi
+              cat "$RUNNER_TEMP/ysec-single-check.log" >>"$RUNNER_TEMP/plugin-check-${{ matrix.wp }}.log"
+            done <"$RUNNER_TEMP/ysec-check-slugs.txt"
+            if [ "$failed" -ne 0 ]; then
+              echo "PCP_INDIVIDUAL_CHECK_FAILURES=$failed"
+              exit 1
+            fi
+            echo "PCP_PHP74_ALL_INDIVIDUAL_CHECKS=PASS ($count)"
+          else
+            php -d max_execution_time=300 -d memory_limit=1024M "$WP" plugin check yablonsky-security "${args[@]}" >"$RUNNER_TEMP/plugin-check-${{ matrix.wp }}.log" 2>&1
+            cat "$RUNNER_TEMP/plugin-check-${{ matrix.wp }}.log"
+            if grep -Eq '[[:space:]]ERROR[[:space:]]' "$RUNNER_TEMP/plugin-check-${{ matrix.wp }}.log"; then
+              echo 'PLUGIN_CHECK_FOUND_ERRORS=FAIL'
+              exit 1
+            fi
+            echo 'PCP_FULL=PASS'
           fi
-          # Control is diagnostic only; keep it in the log as evidence, not a release gate.
-          php -d max_execution_time=300 -d memory_limit=1024M /usr/local/bin/wp plugin check yablonsky-security --path=/tmp/ysec-wp --require=/tmp/ysec-wp/wp-content/plugins/plugin-check/cli.php --mode=new --format=table >"$RUNNER_TEMP/plugin-check-${{ matrix.wp }}.log" 2>&1
-          rc=$?
-          set -e
-          cat "$RUNNER_TEMP/plugin-check-${{ matrix.wp }}.log"
-          if [ -f /tmp/ysec-wp/wp-content/debug.log ]; then
-            echo '=== WordPress PHP debug log ==='
-            tail -n 100 /tmp/ysec-wp/wp-content/debug.log
-          fi
-          if [ "$rc" -ne 0 ]; then exit "$rc"; fi
-          if grep -Eq '[[:space:]]ERROR[[:space:]]' "$RUNNER_TEMP/plugin-check-${{ matrix.wp }}.log"; then
-            echo 'PLUGIN_CHECK_FOUND_ERRORS=FAIL'
-            exit 1
-          fi
-          echo 'PLUGIN_CHECK_NO_ERRORS=PASS'
       - name: Upload Plugin Check log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ysec-plugin-check-${{ matrix.wp }}
+          name: ysec-plugin-check-${{ matrix.wp }}-php${{ matrix.php }}
           path: ${{ runner.temp }}/plugin-check-${{ matrix.wp }}.log
           if-no-files-found: ignore
   wpcs:
@@ -171,3 +177,43 @@ jobs:
           name: ysec-wpcs-security
           path: ${{ runner.temp }}/wpcs-security.txt
           if-no-files-found: ignore
+
+  package:
+    name: Freeze and verify WordPress installer
+    runs-on: ubuntu-latest
+    needs: [php-syntax, wordpress, wpcs]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconcile the SHA manifest and package only runtime source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/yablonsky-security
+          rsync -a --exclude='.git' --exclude='.github' --exclude='.gitignore' --exclude='README.md' --exclude='tests' --exclude='dist' ./ dist/yablonsky-security/
+          cd dist/yablonsky-security
+          sha256sum --check --status SHA256SUMS.txt
+          echo 'SHA256_MANIFEST=PASS'
+          test "$(find languages -name 'yablonsky-security-*.po' | wc -l)" = '36'
+          test "$(find languages -name 'yablonsky-security-*.mo' | wc -l)" = '36'
+          grep -q 'Stable tag: 2.88.6' readme.txt
+          grep -q 'Version: 2.88.6' yablonsky-security.php
+          test "$(wc -c <readme.txt)" -lt 10000
+          test -f docs/YABLONSKY_PRODUCT_VERSIONING_CANON_v1.0.0_2026-09-21.md
+          test -f assets/captcha-loader-2-84-2.js
+          test -f assets/login-security-2-84-2.css
+          test -f assets/admin-2-88-5.js
+          test -f assets/admin-2-88-5.css
+          test ! -e .git
+          test ! -e .github
+          cd ..
+          zip -X -q -r yablonsky-security-2.88.6.zip yablonsky-security
+          unzip -tq yablonsky-security-2.88.6.zip
+          sha256sum yablonsky-security-2.88.6.zip | tee INSTALLER_SHA256.txt
+          echo 'INSTALLER_INTEGRITY=PASS'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ysec-2.88.6-validated-package
+          path: |
+            dist/yablonsky-security-2.88.6.zip
+            dist/INSTALLER_SHA256.txt
+          compression-level: 0
