@@ -108,6 +108,13 @@ jobs:
           echo "PCP_CONTROL_RC=$control_rc"
           tail -n 12 /tmp/ysec-pcp-control.log || true
           echo '=== Plugin Check YSec ==='
+          if [ "${{ matrix.php }}" = '7.4' ]; then
+            echo '=== PHP 7.4 isolated static-only diagnostic (without runtime --require) ==='
+            php -d max_execution_time=180 -d memory_limit=1024M /usr/local/bin/wp plugin check yablonsky-security --path=/tmp/ysec-wp --mode=new --format=table >/tmp/ysec-pcp-static.log 2>&1
+            static_rc=$?
+            echo "PCP_PHP74_STATIC_RC=$static_rc"
+            tail -n 25 /tmp/ysec-pcp-static.log || true
+          fi
           # Control is diagnostic only; keep it in the log as evidence, not a release gate.
           php -d max_execution_time=300 -d memory_limit=1024M /usr/local/bin/wp plugin check yablonsky-security --path=/tmp/ysec-wp --require=/tmp/ysec-wp/wp-content/plugins/plugin-check/cli.php --mode=new --format=table >"$RUNNER_TEMP/plugin-check-${{ matrix.wp }}.log" 2>&1
           rc=$?
