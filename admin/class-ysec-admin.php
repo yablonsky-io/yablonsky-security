@@ -139,11 +139,12 @@ final class YSEC_Admin {
         if ( 'toplevel_page_yablonsky-security' !== $hook ) {
             return;
         }
-        $asset_version = str_replace( '.', '-', YSEC_VERSION );
-        // Put the release coordinate in the asset path itself. Some optimization/privacy plugins
-        // strip ?ver= query arguments, so path-versioning prevents stale admin CSS/JS after upgrades.
-        wp_enqueue_style( 'ysec-admin', YSEC_URL . 'assets/admin-' . $asset_version . '.css', array(), YSEC_VERSION );
-        wp_enqueue_script( 'ysec-admin', YSEC_URL . 'assets/admin-' . $asset_version . '.js', array( 'jquery' ), YSEC_VERSION, true );
+        // Pin filenames to the actual admin asset build, not the PHP patch version.
+        // An unchanged JS/CSS build stays valid across corrective PHP releases even
+        // when a cache optimizer strips ?ver=. The release gate validates file existence.
+        $admin_asset_build = '2-88-5';
+        wp_enqueue_style( 'ysec-admin', YSEC_URL . 'assets/admin-' . $admin_asset_build . '.css', array(), YSEC_VERSION );
+        wp_enqueue_script( 'ysec-admin', YSEC_URL . 'assets/admin-' . $admin_asset_build . '.js', array( 'jquery' ), YSEC_VERSION, true );
         wp_localize_script(
             'ysec-admin',
             'YSEC_ADMIN',

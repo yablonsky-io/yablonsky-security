@@ -1,0 +1,219 @@
+name: YSec WordPress.org compliance preflight
+on:
+  push:
+    branches:
+      - fix/wporg-compliance-2.88.6
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ysec-wporg-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  php-syntax:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['7.4', '8.4']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+      - name: PHP syntax and source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do php -l "$file" >/dev/null; done < <(find . -name '*.php' -print0)
+          php -r '
+          $p=file_get_contents("yablonsky-security.php");
+          $r=file_get_contents("readme.txt");
+          if(strpos($p,"Version: 2.88.6")===false || strpos($r,"Stable tag: 2.88.6")===false) exit(1);
+          foreach(["admin-2-88-5.js","admin-2-88-5.css","captcha-loader-2-84-2.js","login-security-2-84-2.css"] as $f) if(!is_file("assets/".$f)) exit(2);
+          if(strlen($r)>=10000) exit(3);
+          if(count(glob("languages/yablonsky-security-*.po"))!==36 || count(glob("languages/yablonsky-security-*.mo"))!==36) exit(4);
+          if(strpos(file_get_contents("LICENSE"),"GNU GENERAL PUBLIC LICENSE")===false) exit(5);
+          echo "SOURCE_STATIC_GATE=PASS\n";
+          '
+      - name: JavaScript syntax
+        run: |
+          for x in assets/*.js; do node --check "$x"; done
+          echo 'JS_SYNTAX=PASS'
+  wordpress:
+    runs-on: ubuntu-latest
+    needs: php-syntax
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { wp: '6.4.2', php: '7.4' }
+          - { wp: '6.4.2', php: '8.4' }
+          - { wp: '7.1.4', php: '7.4' }
+          - { wp: '7.1.4', php: '8.4' }
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: testpass
+          MYSQL_DATABASE: wordpress
+          MYSQL_USER: wordpress
+          MYSQL_PASSWORD: wordpress
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -uroot -ptestpass"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mysqli, mbstring, dom, curl, zip
+          ini-values: max_execution_time=300, memory_limit=1024M
+          coverage: none
+      - name: WordPress clean install and YSec activation
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar -o /tmp/wp-cli.phar
+          sudo mv /tmp/wp-cli.phar /usr/local/bin/wp
+          sudo chmod +x /usr/local/bin/wp
+          mkdir -p /tmp/ysec-wp/wp-content/plugins
+          wp core download --version='${{ matrix.wp }}' --path=/tmp/ysec-wp
+          wp config create --path=/tmp/ysec-wp --dbname=wordpress --dbuser=wordpress --dbpass=wordpress --dbhost=127.0.0.1
+          wp core install --path=/tmp/ysec-wp --url=http://localhost --title='YSec CI' --admin_user=admin --admin_password='local-test-password' --admin_email=ci@example.invalid --skip-email
+          mkdir -p /tmp/ysec-wp/wp-content/plugins/yablonsky-security
+          rsync -a --exclude='.git' --exclude='.github' --exclude='.gitignore' --exclude='tests' "$GITHUB_WORKSPACE/" /tmp/ysec-wp/wp-content/plugins/yablonsky-security/
+          wp config set WP_DEBUG true --raw --path=/tmp/ysec-wp
+          wp config set WP_DEBUG_LOG true --raw --path=/tmp/ysec-wp
+          wp config set WP_DEBUG_DISPLAY true --raw --path=/tmp/ysec-wp
+          wp config set WP_DISABLE_FATAL_ERROR_HANDLER true --raw --path=/tmp/ysec-wp
+          wp plugin activate yablonsky-security --path=/tmp/ysec-wp
+          wp plugin is-active yablonsky-security --path=/tmp/ysec-wp
+          wp eval 'echo "YSEC_ACTIVE=".YSEC_VERSION."\n";' --path=/tmp/ysec-wp
+      - name: WordPress Plugin Check (full on 8.4, exhaustive isolated checks on 7.4)
+        shell: bash
+        run: |
+          set -euo pipefail
+          wp plugin install plugin-check --activate --path=/tmp/ysec-wp
+          WP=/usr/local/bin/wp
+          args=(--path=/tmp/ysec-wp --require=/tmp/ysec-wp/wp-content/plugins/plugin-check/cli.php --mode=new --format=table)
+          if [ "${{ matrix.php }}" = '7.4' ]; then
+            # PHP 7.4 legacy runner terminates with 255 when scanning this 19MB
+            # multilingual package in a single aggregate PCP invocation. Run
+            # every stable check in a separate official PCP process instead;
+            # all individual errors and nonzero statuses remain fatal.
+            "$WP" plugin list-checks --path=/tmp/ysec-wp --format=csv --fields=slug >"$RUNNER_TEMP/ysec-check-slugs.csv"
+            tail -n +2 "$RUNNER_TEMP/ysec-check-slugs.csv" | tr -d '\r' | sed '/^[[:space:]]*$/d' >"$RUNNER_TEMP/ysec-check-slugs.txt"
+            count=$(wc -l <"$RUNNER_TEMP/ysec-check-slugs.txt")
+            echo "PCP_STABLE_CHECK_COUNT=$count"
+            if [ "$count" -lt 10 ]; then echo 'PCP_CHECK_ENUMERATION=FAIL'; exit 1; fi
+            failed=0
+            : >"$RUNNER_TEMP/plugin-check-${{ matrix.wp }}.log"
+            while IFS= read -r check; do
+              printf 'CHECK %s\n' "$check" >>"$RUNNER_TEMP/plugin-check-${{ matrix.wp }}.log"
+              set +e
+              php -d max_execution_time=300 -d memory_limit=1024M "$WP" plugin check yablonsky-security "${args[@]}" --checks="$check" >"$RUNNER_TEMP/ysec-single-check.log" 2>&1
+              rc=$?
+              set -e
+              if [ "$rc" -ne 0 ] || grep -Eq '[[:space:]]ERROR[[:space:]]' "$RUNNER_TEMP/ysec-single-check.log"; then
+                echo "CHECK_FAIL=$check exit=$rc"
+                cat "$RUNNER_TEMP/ysec-single-check.log"
+                failed=$((failed + 1))
+              else
+                echo "CHECK_PASS=$check"
+              fi
+              cat "$RUNNER_TEMP/ysec-single-check.log" >>"$RUNNER_TEMP/plugin-check-${{ matrix.wp }}.log"
+            done <"$RUNNER_TEMP/ysec-check-slugs.txt"
+            if [ "$failed" -ne 0 ]; then
+              echo "PCP_INDIVIDUAL_CHECK_FAILURES=$failed"
+              exit 1
+            fi
+            echo "PCP_PHP74_ALL_INDIVIDUAL_CHECKS=PASS ($count)"
+          else
+            php -d max_execution_time=300 -d memory_limit=1024M "$WP" plugin check yablonsky-security "${args[@]}" >"$RUNNER_TEMP/plugin-check-${{ matrix.wp }}.log" 2>&1
+            cat "$RUNNER_TEMP/plugin-check-${{ matrix.wp }}.log"
+            if grep -Eq '[[:space:]]ERROR[[:space:]]' "$RUNNER_TEMP/plugin-check-${{ matrix.wp }}.log"; then
+              echo 'PLUGIN_CHECK_FOUND_ERRORS=FAIL'
+              exit 1
+            fi
+            echo 'PCP_FULL=PASS'
+          fi
+      - name: Upload Plugin Check log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ysec-plugin-check-${{ matrix.wp }}-php${{ matrix.php }}
+          path: ${{ runner.temp }}/plugin-check-${{ matrix.wp }}.log
+          if-no-files-found: ignore
+  wpcs:
+    name: WordPress coding/security standards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          tools: composer
+          coverage: none
+      - name: Install official WordPress coding standards
+        run: |
+          composer config --global allow-plugins.dealerdirect/phpcodesniffer-composer-installer true
+          composer global require --no-interaction "squizlabs/php_codesniffer:^3.13" "wp-coding-standards/wpcs:^3.2" "dealerdirect/phpcodesniffer-composer-installer:^1.0"
+      - name: Scan plugin security and write full report
+        shell: bash
+        run: |
+          set -euo pipefail
+          PHPCS="$(composer global config bin-dir --absolute)/phpcs"
+          "$PHPCS" --standard=WordPress --sniffs=WordPress.Security.EscapeOutput,WordPress.Security.NonceVerification,WordPress.Security.ValidatedSanitizedInput --extensions=php --report=summary . 2>&1 | tee "$RUNNER_TEMP/wpcs-security.txt"
+      - name: Upload WPCS report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ysec-wpcs-security
+          path: ${{ runner.temp }}/wpcs-security.txt
+          if-no-files-found: ignore
+
+  package:
+    name: Freeze and verify WordPress installer
+    runs-on: ubuntu-latest
+    needs: [php-syntax, wordpress, wpcs]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconcile the SHA manifest and package only runtime source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/yablonsky-security
+          rsync -a --exclude='.git' --exclude='.github' --exclude='.gitignore' --exclude='README.md' --exclude='tests' --exclude='dist' ./ dist/yablonsky-security/
+          cd dist/yablonsky-security
+          sha256sum --check --status SHA256SUMS.txt
+          echo 'SHA256_MANIFEST=PASS'
+          test "$(find languages -name 'yablonsky-security-*.po' | wc -l)" = '36'
+          test "$(find languages -name 'yablonsky-security-*.mo' | wc -l)" = '36'
+          grep -q 'Stable tag: 2.88.6' readme.txt
+          grep -q 'Version: 2.88.6' yablonsky-security.php
+          test "$(wc -c <readme.txt)" -lt 10000
+          test -f docs/YABLONSKY_PRODUCT_VERSIONING_CANON_v1.0.0_2026-09-21.md
+          test -f assets/captcha-loader-2-84-2.js
+          test -f assets/login-security-2-84-2.css
+          test -f assets/admin-2-88-5.js
+          test -f assets/admin-2-88-5.css
+          test ! -e .git
+          test ! -e .github
+          cd ..
+          zip -X -q -r yablonsky-security-2.88.6.zip yablonsky-security
+          unzip -tq yablonsky-security-2.88.6.zip
+          sha256sum yablonsky-security-2.88.6.zip | tee INSTALLER_SHA256.txt
+          echo 'INSTALLER_INTEGRITY=PASS'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ysec-2.88.6-validated-package
+          path: |
+            dist/yablonsky-security-2.88.6.zip
+            dist/INSTALLER_SHA256.txt
+          compression-level: 0
