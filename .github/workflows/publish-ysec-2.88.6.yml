@@ -1,0 +1,104 @@
+name: Publish Yablonsky Security v2.88.6
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-ysec-2.88.6.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: publish-ysec-v2.88.6
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Retrieve the already-validated installer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          gh run download 42539017047 --repo "$GITHUB_REPOSITORY" --name ysec-2.88.6-validated-package --dir release
+          test -f release/yablonsky-security-2.88.6.zip
+          echo '8d193843f87193cffebea53baf79b06bd2859233b57b01aae73b7754d9b2de2c  release/yablonsky-security-2.88.6.zip' | sha256sum -c -
+          unzip -tq release/yablonsky-security-2.88.6.zip
+          unzip -p release/yablonsky-security-2.88.6.zip yablonsky-security/yablonsky-security.php | grep -Fq ' * Version: 2.88.6'
+          unzip -p release/yablonsky-security-2.88.6.zip yablonsky-security/readme.txt | grep -Fq 'Stable tag: 2.88.6'
+          echo 'RELEASE_ARTIFACT_INTEGRITY=PASS'
+      - name: Publish exact 2.88.6 release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view v2.88.6 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'Release v2.88.6 already exists; refusing to replace or modify it.'
+            exit 1
+          fi
+          cat > release-notes.md <<'RELEASE_NOTES'
+          # Yablonsky Security 2.88.6 — WordPress Firewall, Malware Scanner & Login Protection
+          
+          **A corrective release of Yablonsky Security, the local-first WordPress security plugin with WAF protection, malware scanning, file integrity monitoring, login protection, security hardening, event forensics, and optional AI-assisted analysis.**
+          
+          ## What's improved in version 2.88.6
+          
+          - **CAPTCHA and login protection:** Corrected references to bundled reCAPTCHA/Turnstile bootstrap JavaScript and login styles. The client challenge no longer depends on a matching PHP patch-version filename.
+          - **Administration assets:** Corrected asset-build references to preserve dashboard CSS and JavaScript loading across corrective releases.
+          - **CSP report handling:** Prevented unbounded anonymous reports when a reliable client IP is unavailable.
+          - **WordPress.org readiness:** Aligned the plugin homepage with [Yablonsky Security](https://yablonsky.io/security/), included the full GPL v2 license text, and streamlined the WordPress catalog readme.
+          - **Compatibility:** Existing security settings, local data, firewall policy, REST contracts, and supported workflows are preserved.
+          
+          ## WordPress security features
+          
+          - Web application firewall (WAF), suspicious-request monitoring and guarded responses
+          - Local malware scanning, file integrity checks, encrypted quarantine, and controlled recovery
+          - WordPress and WooCommerce login protection, CAPTCHA and optional TOTP two-factor authentication
+          - Security hardening, event forensics, reconnaissance monitoring, and administrator-led workflows
+          - Optional AI-assisted security analysis; core security protection does not require an external AI service
+          
+          ## Download and installation
+          
+          Download **`yablonsky-security-2.88.6.zip`** from the Release Assets below. In WordPress Admin, select **Plugins → Add New Plugin → Upload Plugin**, upload the ZIP, and review your security settings after activation.
+          
+          **Important:** GitHub's automatic “Source code” archives are not the recommended WordPress installer; use the attached versioned plugin ZIP.
+          
+          ## Verification
+          
+          - Automated PHP syntax checks: PHP 7.4 and 8.4
+          - Installation/activation and WordPress Plugin Check: WordPress 6.4.2 and 7.1.4 with PHP 7.4 and 8.4
+          - WordPress coding/security standards checks: PASS for the configured security rules
+          - 36 bundled PO/MO localization pairs: structural validation
+          - ZIP integrity and 154-file source checksum manifest: PASS
+          
+          **Installer SHA-256:** `8d193843f87193cffebea53baf79b06bd2859233b57b01aae73b7754d9b2de2c`
+          
+          ## Official Yablonsky.io resources
+          
+          - [Yablonsky Security — WordPress security plugin](https://yablonsky.io/security/)
+          - [Yablonsky SEO — GEO & AEO](https://yablonsky.io/seo/)
+          - [Yablonsky AI Chatbots — AI assistants for websites](https://yablonsky.io/ai-chatbots/)
+          - [Yablonsky.io AI platform](https://ai.yablonsky.io/)
+          - [Yablonsky.io — official website](https://yablonsky.io/)
+          
+          ---
+          
+          Developed and maintained by [Yablonsky.io](https://yablonsky.io/).
+          
+          **Yablonsky Security — Protect locally. Stay in control.**
+          RELEASE_NOTES
+          gh release create v2.88.6 release/yablonsky-security-2.88.6.zip \
+            --repo "$GITHUB_REPOSITORY" \
+            --target a44deb4ab1e41d3736cf8ce72ac96ed25df225c5 \
+            --title 'Yablonsky Security 2.88.6' \
+            --notes-file release-notes.md \
+            --latest
+          gh release view v2.88.6 --repo "$GITHUB_REPOSITORY" --json tagName,name,isDraft,isPrerelease,assets,url
+          echo 'YSEC_RELEASE_2_88_6=PUBLISHED'
